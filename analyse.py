@@ -1,7 +1,7 @@
 # Analyse and plot all PicoMuon CSV files in the data folder.
 import csv
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import matplotlib.dates as mdates
@@ -61,6 +61,34 @@ def average(events, field):
     return sum(event[field] for event in events) / len(events)
 
 
+def hourly_muon_averages(events):
+    """Average C counts over minutes containing any T/B/C records in each hour."""
+    minutes = Counter()
+    for event in events:
+        if event["type"] not in ("T", "B", "C"):
+            continue
+        minute = event["time"].replace(second=0, microsecond=0)
+        minutes[minute] += int(event["type"] == "C")
+
+    if not minutes:
+        return [], []
+
+    totals = Counter()
+    coverage = Counter()
+    for minute, count in minutes.items():
+        hour = minute.replace(minute=0)
+        totals[hour] += count
+        coverage[hour] += 1
+
+    hours, averages = [], []
+    hour = min(coverage)
+    while hour <= max(coverage):
+        hours.append(hour)
+        averages.append(totals[hour] / coverage[hour] if coverage[hour] else float("nan"))
+        hour += timedelta(hours=1)
+    return hours, averages
+
+
 def plot_data(events):
     """Make four simple plots from the recorded events."""
     times = [event["time"] for event in events]
@@ -70,20 +98,13 @@ def plot_data(events):
     figure, axes = plt.subplots(2, 2, figsize=(12, 8))
     figure.suptitle("PicoMuon data analysis")
 
-    # Plot 1: every event, so the different event types can be compared in time.
-    for event_type in types:
-        event_times = [event["time"] for event in events if event["type"] == event_type]
-        axes[0, 0].plot(
-            event_times,
-            [event_type] * len(event_times),
-            ".",
-            label=event_type,
-            color=colours[event_type],
-            alpha=0.6,
-        )
-    axes[0, 0].set_title("Events over time")
-    axes[0, 0].set_ylabel("Event type")
-    axes[0, 0].legend(title="Type")
+    # Plot 1: each point represents one clock hour, including its date.
+    hours, averages = hourly_muon_averages(events)
+    axes[0, 0].plot(hours, averages, "o-", color=colours["C"])
+    axes[0, 0].set_title("Muon coincidences (C): hourly average")
+    axes[0, 0].set_ylabel("Recorded C events / minute")
+    axes[0, 0].set_ylim(bottom=0)
+    axes[0, 0].grid(True, alpha=0.25)
 
     # Plot 2: ADC values show the pulse-height distribution for each detector.
     for event_type in types:
@@ -109,12 +130,17 @@ def plot_data(events):
     axes[1, 1].set_ylabel("Pressure (hPa)")
     axes[1, 1].grid(True, alpha=0.25)
 
-    for axis in axes.flat:
-        axis.set_xlabel("Time")
-        axis.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    for axis in (axes[0, 0], axes[1, 0], axes[1, 1]):
+        axis.set_xlabel("Local date and time")
+        locator = mdates.AutoDateLocator()
+        axis.xaxis.set_major_locator(locator)
+        axis.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
         axis.tick_params(axis="x", rotation=30)
 
-    figure.tight_layout()
+    figure.text(0.5, 0.015,
+                "Hourly averages use minutes with T/B/C records only. Partial minutes are not scaled; no dead-time correction.",
+                ha="center", fontsize=8)
+    figure.tight_layout(rect=(0, 0.04, 1, 0.96))
     plt.show()
 
 

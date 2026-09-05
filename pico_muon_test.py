@@ -3,7 +3,7 @@ import serial
 from datetime import datetime
 
 # Serial port and communication speed for the attached detector.
-PORT = "COM7"
+PORT = "COM7"  #WIll need to change this on linux/RPi to /dev/ttyACM0 or other serial ports.
 BAUD_RATE = 115200
 
 print(f"Connecting to PicoMuon on {PORT}...")
