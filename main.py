@@ -4,7 +4,7 @@ from data import save_event
 
 
 # Serial port and communication speed for the attached detector.
-PORT = "COM7"
+PORT =  "/dev/ttyACM0" # "COM7" 
 BAUD_RATE = 115200
 
 
